@@ -1,0 +1,7 @@
+requests
+websockets
+python-dotenv
+openpyxl
+filelock
+aiohttp
+APScheduler
