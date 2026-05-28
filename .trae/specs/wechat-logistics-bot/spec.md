@@ -55,16 +55,216 @@
 - 数据库：PostgreSQL（业务数据）+ Redis（缓存）
 - ORM框架：SQLAlchemy 或 GORM
 
-**微信接入方案：**
-- 方案A：商业第三方微信机器人服务（推荐，稳定且成本可控）
-- 方案B：基于PC微信Hook（适合有技术能力，需要低成本）
-- 方案C：基于Web微信协议（需要持续维护，风险较高）
+**微信接入方案详细对比：**
+
+| 方案 | 说明 | 优势 | 劣势 | 推荐度 |
+|------|------|------|------|--------|
+| **方案A：微信官方iLink API (ClawBot)** | 2026年3月微信官方发布的AI助手连接插件，基于iLink协议 | ✅ 官方合法，无封号风险<br>✅ 稳定可靠，服务器端API<br>✅ 支持私聊、群聊、多媒体<br>✅ 有法律文件背书 | ⚠️ 功能相对受限<br>⚠️ 初期可能有限制 | ⭐⭐⭐⭐⭐ |
+| **方案B：商业第三方服务（WTAPI/E云管家/GEWE）** | 基于iPad协议的商业API服务，提供完整SDK | ✅ 功能完整，支持全场景<br>✅ 有技术支持<br>✅ 多账号管理<br>✅ 风控保护机制 | ⚠️ 需要付费<br>⚠️ 仍有理论封号风险（但比Hook低） | ⭐⭐⭐⭐ |
+| **方案C：开源框架（Wechaty/Hermes）** | 开源的机器人SDK，需自行维护 | ✅ 完全免费<br>✅ 高度可定制<br>✅ 社区支持 | ⚠️ 学习曲线陡峭<br>⚠️ 封号风险较高<br>⚠️ 需要技术能力自行维护 | ⭐⭐⭐ |
 
 **部署方案：**
 - 容器化：Docker + Docker Compose
 - 编排：Kubernetes（生产环境）或 Docker Swarm（中小规模）
 - 监控：Prometheus + Grafana
 - 日志：ELK Stack 或 Loki + Promtail
+
+---
+
+## 微信接入方案详细分析
+
+### 方案A：微信官方iLink API (ClawBot) - 首选推荐
+
+#### 核心信息
+- **发布时间**：2026年3月22日
+- **协议地址**：https://ilinkai.weixin.qq.com
+- **官方定位**：AI助手连接插件，基于iLink协议
+- **接入方式**：扫码登录，类似OpenClaw/龙虾的接入方式
+
+#### 技术特点
+- **协议类型**：HTTP/JSON标准接口
+- **核心API端点**：
+  - `/ilink/bot/get_bot_qrcode` - 获取登录二维码
+  - `/ilink/bot/get_qrcode_status` - 查询扫码状态
+  - `/ilink/bot/getupdates` - 长轮询获取消息
+  - `/ilink/bot/sendmessage` - 发送回复消息
+  - `sendtyping` - 发送正在输入状态
+- **认证机制**：bot_token，需扫描二维码获取
+- **媒体加密**：AES-128-ECB加密的CDN文件
+
+#### 核心功能
+- ✅ 私聊对话
+- ✅ 群聊@响应
+- ✅ 文本消息收发
+- ✅ 图片消息收发
+- ✅ 语音消息收发
+- ✅ 文件消息收发
+- ✅ 流式输出支持
+- ✅ 长连接消息获取
+
+#### 安全性分析
+- **合法性**：✅ 官方开放，有法律文件背书
+- **封号风险**：✅ 正常使用无封号风险
+- **数据安全**：✅ 腾讯服务器中转加密
+- **合规性**：✅ 完全符合微信服务协议
+
+#### 适用场景
+- 个人智能客服
+- 企业内部服务机器人
+- 不需要复杂营销功能的场景
+- 对稳定性和合规性要求高的项目
+
+#### 实施建议
+```python
+# 示例：iLink API接入方式
+import requests
+import time
+
+BASE_URL = "https://ilinkai.weixin.qq.com"
+
+def get_qrcode():
+    url = f"{BASE_URL}/ilink/bot/get_bot_qrcode?bot_type=3"
+    resp = requests.get(url, timeout=35)
+    return resp.json()
+
+def poll_qrcode_status(qrcode_raw):
+    url = f"{BASE_URL}/ilink/bot/get_qrcode_status?qrcode={qrcode_raw}"
+    headers = {"iLink-App-ClientVersion": "1"}
+    
+    for _ in range(480):  # 最多8分钟
+        resp = requests.get(url, headers=headers, timeout=35)
+        data = resp.json()
+        
+        if data.get("status") == "confirmed":
+            return data.get("token"), data.get("ilink_bot_id")
+        elif data.get("status") == "expired":
+            raise Exception("二维码已过期")
+        
+        time.sleep(1)
+
+def get_updates(bot_token):
+    url = f"{BASE_URL}/ilink/bot/getupdates"
+    headers = {"Authorization": f"Bearer {bot_token}"}
+    resp = requests.get(url, headers=headers, timeout=35)
+    return resp.json()
+
+def send_message(bot_token, context_token, content):
+    url = f"{BASE_URL}/ilink/bot/sendmessage"
+    headers = {"Authorization": f"Bearer {bot_token}"}
+    data = {"context_token": context_token, "content": content}
+    resp = requests.post(url, headers=headers, json=data, timeout=35)
+    return resp.json()
+```
+
+---
+
+### 方案B：商业第三方服务对比
+
+#### 1. WTAPI框架
+- **官方站点**：https://www.chuapi.com
+- **开发文档**：https://weiti.apifox.cn
+- **协议类型**：iPad协议 (8.0.37)
+- **核心优势**：
+  - 功能全面，百余个标准化API
+  - 多语言SDK支持（Java/Python/Go/Node.js/PHP）
+  - 非侵入式RPA架构，无需Root
+  - 封号风险降低80%+的风控机制
+  - 支持私有化部署
+- **价格信息**：
+  - 试用版：7天免费
+  - 正式套餐：需咨询客服
+- **核心API能力**：
+  - 消息接口：文本/图片/视频/文件/小程序
+  - 好友管理：添加/删除/标签/备注
+  - 群管理：建群/踢人/公告/群发
+  - 朋友圈：发布/点赞/评论
+- **技术架构**：
+  - AES-256加密
+  - 动态心跳间隔15-45秒
+  - 流量混淆机制
+  - 设备指纹模拟
+
+#### 2. E云管家
+- **定价参考**：
+  - 试用期：3天
+  - 消息计费：¥0.02/条
+  - 月套餐：¥499/月起
+- **特点**：企业级解决方案，功能完整
+
+#### 3. GEWE
+- **定价参考**：
+  - 免费额度：100条/天
+  - 消息计费：¥0.015/条
+  - 月套餐：¥399/月起
+- **协议版本**：iPad协议8.0.38+
+- **特点**：开发者友好，文档完善
+
+#### 商业服务通用风险控制建议
+- 使用多个微信账号分散风险
+- 控制消息发送频率（建议每分钟不超过20条）
+- 避免发送营销内容，专注服务性质
+- 定时轮换账号
+- 使用服务性质的个人微信号（非营销号）
+
+---
+
+### 方案C：开源方案对比
+
+#### 1. Wechaty
+- **定位**：多语言Bot SDK
+- **支持语言**：TypeScript/Python/Java/Go
+- **优势**：成熟生态，插件丰富
+- **需要**：需申请token，有免费额度
+
+#### 2. Hermes Agent
+- **GitHub Stars**：126k+
+- **核心特点**：
+  - 自进化学习系统
+  - 三层记忆系统
+  - 自动创建Skills
+  - 支持15+消息平台（包括微信）
+- **安装方式**：
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
+  hermes
+  hermes gateway setup
+  ```
+- **适用场景**：
+  - 需要AI Agent能力的智能客服
+  - 需要自动学习和优化的场景
+  - 有服务器资源可以7x24小时运行
+
+#### 开源方案风险提示
+⚠️ 仍有较高封号风险，建议使用小号测试
+⚠️ 需要较强的技术能力自行维护
+⚠️ 功能更新可能跟不上微信版本变化
+
+---
+
+## 最终推荐方案组合
+
+根据您的需求（国内零担专线物流客服），我推荐：
+
+### 推荐配置（按优先级排序）
+1. **首选**：微信官方iLink API (ClawBot)
+   - 理由：最安全、最稳定、无封号风险
+   - 适合：主要运单查询、状态查询等基础客服功能
+
+2. **备选**：WTAPI框架
+   - 理由：功能最全、风险可控、有技术支持
+   - 适合：如果iLink功能不够用，作为补充方案
+   - 建议：使用专用客服小号，不要用主账号
+
+3. **兜底**：Hermes Agent + 官方iLink
+   - 理由：可以利用AI Agent的智能学习能力
+   - 适合：需要复杂意图理解、多轮对话的场景
+
+### 具体实施策略
+- **阶段1**：先用iLink API搭建基础功能
+- **阶段2**：如功能不足，引入WTAPI作为补充
+- **阶段3**：考虑接入Hermes提升智能理解能力
+
+---
 
 ## 三、核心功能模块
 
