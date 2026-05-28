@@ -211,12 +211,19 @@ def send_message(bot_token, context_token, content):
 ### 方案C：开源方案对比
 
 #### 1. Wechaty
+- **GitHub地址**：https://github.com/wechaty/wechaty/
+- **官方文档**：https://wechaty.js.org/docs/api
+- **快速入门项目**：https://github.com/wechaty/getting-started
+- **Docker入门**：https://github.com/wechaty/docker-wechaty-getting-started
 - **定位**：多语言Bot SDK
 - **支持语言**：TypeScript/Python/Java/Go
 - **优势**：成熟生态，插件丰富
 - **需要**：需申请token，有免费额度
 
 #### 2. Hermes Agent
+- **GitHub地址**：https://github.com/NousResearch/hermes-agent
+- **官方网站**：https://get-hermes.ai/
+- **官方文档**：https://hermes-agent.nousresearch.com/docs
 - **GitHub Stars**：126k+
 - **核心特点**：
   - 自进化学习系统
